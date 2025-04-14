@@ -79,7 +79,7 @@ The backup files will be stored in the directory specified by the `BT_BACKUP_DIR
 ```
 /backups/<date>/<db_name>_<timestamp>.sql
 ```
-Where `<db_name>` is the name of the database, `<timestamp>` is the unix timestamp of the backup, and `<extension>` is the file extension for the backup format (e.g. .sql for MySQL, .sql.gz for compressed MySQL backups, .dump for PostgreSQL, etc.).
+Where `<date>` is the date of the backup ('YY-MM-DD' format) `<db_name>` is the name of the database, `<timestamp>` is the unix timestamp of the backup.
 
 ## Roadmap
 - [x] Add support for SQLite backups
