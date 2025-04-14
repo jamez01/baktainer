@@ -56,9 +56,44 @@ services:
       POSTGRES_USER: "${DB_USER:-user}"
       POSTGRES_PASSWORD: "${DB_PASSWORD:-StrongPassword}"
     labels:
-      - baktainer.backup: "true"
-      - baktainer.db.name: "my-db"
-      - baktainer.db.password: "StrongPassword"
-      - baktainer.db.engine: "postgres"
-      - baktainer.name: "MyApp"
+      - baktainer.backup=true
+      - baktainer.db.engine=postgres
+      - baktainer.db.name=my-db
+      - baktainer.db.user=user
+      - baktainer.db.password=StrongPassword
+      - baktainer.name="MyApp"
 ```
+
+## Possible Values for Labels
+| Label | Description |
+| ----- | ----------- |
+| baktainer.backup | Set to true to enable backup for this container |
+| baktainer.db.engine | Database engine (mysql, postgres, mongodb, sqlite) |
+| baktainer.db.name | Name of the database to backup |
+| baktainer.db.user | Username for the database |
+| baktainer.db.password | Password for the database |
+| baktainer.name | Name of the application (optional). Determines name of sql dump file. |
+
+## Backup Files
+The backup files will be stored in the directory specified by the `BT_BACKUP_DIR` environment variable. The files will be named according to the following format:
+```
+/backups/<date>/<db_name>_<timestamp>.sql
+```
+Where `<db_name>` is the name of the database, `<timestamp>` is the unix timestamp of the backup, and `<extension>` is the file extension for the backup format (e.g. .sql for MySQL, .sql.gz for compressed MySQL backups, .dump for PostgreSQL, etc.).
+
+## Roadmap
+- [x] Add support for SQLite backups
+- [x] Add support for MongoDB backups
+- [x] Add support for MySQL backups
+- [x] Add support for PostgreSQL backups
+- [x] Add support for cron scheduling
+- [x] Add support for Docker labels to specify which databases to backup
+- [x] Add support for Docker socket
+- [x] Add support for Docker API over TCP
+- [x] Add support for Docker API over SSL
+- [x] Add support for Docker API over HTTP
+- [x] Add support for Docker API over HTTPS
+- [x] Add support for Docker API over Unix socket
+- [ ] Add individual hook for completed backups
+- [ ] Add hook for fullly completed backups
+- [ ] Optionally limit time for each backup
