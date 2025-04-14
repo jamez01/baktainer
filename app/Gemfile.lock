@@ -1,0 +1,26 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    base64 (0.2.0)
+    concurrent-ruby (1.3.5)
+    cron_calc (1.0.0)
+    docker-api (2.4.0)
+      excon (>= 0.64.0)
+      multi_json
+    excon (1.2.5)
+      logger
+    logger (1.7.0)
+    multi_json (1.15.0)
+
+PLATFORMS
+  ruby
+  x86_64-linux
+
+DEPENDENCIES
+  base64 (~> 0.2.0)
+  concurrent-ruby (~> 1.3.5)
+  cron_calc (~> 1.0.0)
+  docker-api (~> 2.4.0)
+
+BUNDLED WITH
+   2.6.2

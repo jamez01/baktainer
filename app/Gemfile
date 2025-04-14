@@ -1,0 +1,7 @@
+# frozen_string_literal: true
+
+source 'https://rubygems.org'
+gem 'base64', '~> 0.2.0'
+gem 'concurrent-ruby', '~> 1.3.5'
+gem 'docker-api', '~> 2.4.0'
+gem 'cron_calc', '~> 1.0.0'

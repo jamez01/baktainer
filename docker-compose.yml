@@ -1,0 +1,23 @@
+services:
+  baktainer:
+    build: .
+    image: jamez01/baktainer:latest
+    container_name: baktainer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backups:/backups
+      - ./config:/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - "BT_DOCKER_URL=unix:///var/run/docker.sock"
+      - BT_CRON=* * * * * # Backup every day at midnight
+      - BT_THREADS=4 # Number of threads to use for backups
+      - BT_BACKUP_DIR=/backups
+      - BT_LOG_LEVEL=info
+      # Enable if using SSL over tcp
+      #- BT_SSL = true
+      #- BT_CA
+      #- BT_CERT
+      #- BT_KEY    
