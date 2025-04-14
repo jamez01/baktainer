@@ -50,7 +50,7 @@ class Baktainer::Runner
     @ssl_options = ssl_options
     Docker.url = @url
     setup_ssl
-    LOGGER.level = ENV['LOG_LEVEL'] || :debug
+    LOGGER.level = ENV['LOG_LEVEL'].to_sym|| :info
   end
 
   def perform_backup
@@ -81,8 +81,7 @@ class Baktainer::Runner
     loop do
       now = Time.now
       next_run = @cron.next.first
-      # sleep_duration = next_run - now
-      sleep_duration = 5
+      sleep_duration = next_run - now
       LOGGER.info("Sleeping for #{sleep_duration} seconds until #{next_run}.")
       sleep(sleep_duration)
       perform_backup
