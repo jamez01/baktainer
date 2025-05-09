@@ -9,7 +9,7 @@ Easily backup databases running in docker containers.
 ```yaml
 services:
   baktainer:
-    image: jamez01/baktainer:latest
+    image: jamez001/baktainer:latest
     container_name: baktainer
     restart: unless-stopped
     volumes:

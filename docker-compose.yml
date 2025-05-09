@@ -1,7 +1,7 @@
 services:
   baktainer:
     build: .
-    image: jamez01/baktainer:latest
+    image: jamez001/baktainer:latest
     container_name: baktainer
     restart: unless-stopped
     volumes:
