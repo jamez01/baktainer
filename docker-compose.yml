@@ -4,8 +4,6 @@ services:
     image: jamez01/baktainer:latest
     container_name: baktainer
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     volumes:
       - ./backups:/backups
       - ./config:/config

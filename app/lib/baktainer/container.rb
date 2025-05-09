@@ -23,7 +23,7 @@ class Baktainer::Container
   end
 
   def name
-    labels["baktainer.name"] || @container.info['Names'].first
+    labels["baktainer.name"] ||  database
   end
 
   def state
@@ -50,6 +50,7 @@ class Baktainer::Container
     labels['baktainer.db.name'] || nil
   end
 
+  
   def validdate
     return raise 'Unable to parse container' if @container.nil?
     return raise 'Container not running' if state.nil? || state != 'running'
@@ -96,7 +97,7 @@ class Baktainer::Container
 end
 
 # :NODOC:
-class Containers
+class Baktainer::Containers
   def self.find_all
     LOGGER.debug('Searching for containers with backup labels.')
     containers = Docker::Container.all.select do |container|

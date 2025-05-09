@@ -19,7 +19,6 @@ services:
       - BT_CRON="0 0 * * *" # Backup every day at midnight
       - "BT_DOCKER_URL=unix:///var/run/docker.sock" 
       - BT_THREADS=4
-      - BT_BACKUP_DIR=/backups
       - BT_LOG_LEVEL=info
       # Enable if using SSL over tcp
       #- BT_SSL = true
@@ -33,7 +32,6 @@ services:
 | -------- | ----------- | ------- |
 | BT_CRON | Cron expression for scheduling backups | 0 0 * * * |
 | BT_THREADS | Number of threads to use for backups | 4 |
-| BT_BACKUP_DIR | Directory to store backups | /backups |
 | BT_LOG_LEVEL | Log level (debug, info, warn, error) | info |
 | BT_SSL | Enable SSL for docker connection | false |
 | BT_CA | Path to CA certificate | none |
@@ -77,9 +75,9 @@ services:
 ## Backup Files
 The backup files will be stored in the directory specified by the `BT_BACKUP_DIR` environment variable. The files will be named according to the following format:
 ```
-/backups/<date>/<db_name>_<timestamp>.sql
+/backups/<date>/<db_name>-<timestamp>.sql
 ```
-Where `<date>` is the date of the backup ('YY-MM-DD' format) `<db_name>` is the name of the database, `<timestamp>` is the unix timestamp of the backup.
+Where `<date>` is the date of the backup ('YY-MM-DD' format) `<db_name>` is the name provided by baktainer.name, or the name of the database, `<timestamp>` is the unix timestamp of the backup.
 
 ## Roadmap
 - [x] Add support for SQLite backups

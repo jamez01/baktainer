@@ -42,7 +42,6 @@ STDOUT.sync = true
 
 
 class Baktainer::Runner
-  SUPPORTED_ENGINES = %w[postgres postgres-all sqlite mongodb mysql mariadb].freeze
   def initialize(url: 'unix:///var/run/docker.sock', ssl: false, ssl_options: {}, threads: 5)
     @pool = Concurrent::FixedThreadPool.new(threads)
     @url = url
@@ -50,14 +49,14 @@ class Baktainer::Runner
     @ssl_options = ssl_options
     Docker.url = @url
     setup_ssl
-    LOGGER.level = ENV['LOG_LEVEL'].to_sym|| :info
+    LOGGER.level = ENV['LOG_LEVEL']&.to_sym || :info
   end
 
   def perform_backup
     LOGGER.info('Starting backup process.')
     LOGGER.debug('Docker Searching for containers.')
-    Containers.find_all.each do |container|
-      # @pool.post do
+    Baktainer::Containers.find_all.each do |container|
+      @pool.post do
         begin
           LOGGER.info("Backing up container #{container.name} with engine #{container.engine}.")
           container.backup
@@ -66,7 +65,7 @@ class Baktainer::Runner
           LOGGER.error("Error backing up container #{container.name}: #{e.message}")
           LOGGER.debug(e.backtrace.join("\n"))
         end
-      # end
+      end
     end
   end
 
