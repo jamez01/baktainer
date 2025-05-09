@@ -11,6 +11,9 @@
 /test/version_tmp/
 /tmp/
 
+# Backups directory
+/backups
+
 # Used by dotenv library to load environment variables.
 # .env
 
