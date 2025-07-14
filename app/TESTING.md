@@ -41,7 +41,8 @@ This script:
 
 - **No Docker Required**: All tests use mocked Docker API calls
 - **Fast Execution**: Tests complete in ~2 seconds
-- **Comprehensive Coverage**: 63 examples testing all major functionality
+- **Comprehensive Coverage**: 66 examples testing all major functionality
+- **High Test Coverage**: 94.94% line coverage (150/158 lines), 71.11% branch coverage
 - **CI Ready**: Automatic test running in GitHub Actions
 
 ## GitHub Actions
@@ -64,6 +65,22 @@ Run tests with coverage:
 COVERAGE=true bundle exec rspec
 open coverage/index.html  # View coverage report
 ```
+
+## Test Coverage Details
+
+Current test coverage metrics:
+- **Line Coverage**: 94.94% (150 out of 158 relevant lines)
+- **Branch Coverage**: 71.11% (32 out of 45 branches)
+
+Coverage breakdown by file:
+- `lib/baktainer.rb`: 94.23% line coverage
+- `lib/baktainer/container.rb`: 92.96% line coverage  
+- `lib/baktainer/postgres.rb`: 100% line coverage
+- `lib/baktainer/mysql.rb`: 100% line coverage
+- `lib/baktainer/mariadb.rb`: 100% line coverage
+- `lib/baktainer/sqlite.rb`: 100% line coverage
+- `lib/baktainer/backup_command.rb`: 100% line coverage
+- `lib/baktainer/logger.rb`: 100% line coverage
 
 ## Test Dependencies
 

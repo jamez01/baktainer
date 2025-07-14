@@ -52,8 +52,9 @@ RSpec.describe Baktainer::Runner do
       cert.sign(key, OpenSSL::Digest::SHA256.new)
       
       cert_pem = cert.to_pem
+      key_pem = key.to_pem
       
-      with_env('BT_CA' => cert_pem, 'BT_CERT' => 'cert-content', 'BT_KEY' => 'key-content') do
+      with_env('BT_CA' => cert_pem, 'BT_CERT' => cert_pem, 'BT_KEY' => key_pem) do
         expect { described_class.new(**ssl_options) }.not_to raise_error
       end
     end
@@ -197,12 +198,14 @@ RSpec.describe Baktainer::Runner do
         cert.sign(key, OpenSSL::Digest::SHA256.new)
         
         cert_pem = cert.to_pem
+        key_pem = key.to_pem
         
-        with_env('BT_CA' => cert_pem, 'BT_CERT' => 'cert-content', 'BT_KEY' => 'key-content') do
+        with_env('BT_CA' => cert_pem, 'BT_CERT' => cert_pem, 'BT_KEY' => key_pem) do
           expect(Docker).to receive(:options=).with(hash_including(
-            client_cert_data: 'cert-content',
-            client_key_data: 'key-content',
-            scheme: 'https'
+            client_cert_data: cert_pem,
+            client_key_data: key_pem,
+            scheme: 'https',
+            ssl_verify_peer: true
           ))
           
           described_class.new(**ssl_options)

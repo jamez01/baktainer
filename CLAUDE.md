@@ -56,6 +56,13 @@ rake coverage               # Tests with coverage
 rake coverage_report        # Open coverage report
 ```
 
+### Test Coverage
+Current test coverage: **94.94% line coverage** (150/158 lines), **71.11% branch coverage** (32/45 branches)
+- 66 test examples covering all major functionality
+- Unit tests for all database engines, container discovery, and backup workflows  
+- Integration tests with mocked Docker API calls
+- Coverage report available at `coverage/index.html` after running tests with `COVERAGE=true`
+
 ### Docker Commands
 ```bash
 # View logs

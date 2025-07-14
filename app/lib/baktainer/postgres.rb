@@ -20,11 +20,11 @@ class Baktainer::BackupCommand
     postgres(login: login, password: password, database: database, all: true)
   end
 
-  def postgresql(*args)
-    postgres(*args)
+  def postgresql(**kwargs)
+    postgres(**kwargs)
   end
 
-  def postgresql_all(*args)
-    postgres_all(*args)
+  def postgresql_all(**kwargs)
+    postgres_all(**kwargs)
   end
 end
