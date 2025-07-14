@@ -1,0 +1,148 @@
+# frozen_string_literal: true
+
+require 'rspec/core/rake_task'
+
+# Default task runs all tests
+task default: [:spec]
+
+# RSpec task for unit tests
+RSpec::Core::RakeTask.new(:spec) do |t|
+  t.pattern = 'spec/unit/**/*_spec.rb'
+  t.rspec_opts = '--format documentation --color'
+end
+
+# RSpec task for integration tests
+RSpec::Core::RakeTask.new(:integration) do |t|
+  t.pattern = 'spec/integration/**/*_spec.rb'
+  t.rspec_opts = '--format documentation --color --tag integration'
+end
+
+# RSpec task for all tests
+RSpec::Core::RakeTask.new(:spec_all) do |t|
+  t.pattern = 'spec/**/*_spec.rb'
+  t.rspec_opts = '--format documentation --color'
+end
+
+# Task to run tests with coverage
+task :coverage do
+  ENV['COVERAGE'] = 'true'
+  Rake::Task[:spec_all].invoke
+end
+
+# Task to setup test environment
+task :test_setup do
+  puts 'Setting up test environment...'
+  
+  # Start test containers
+  compose_file = File.expand_path('spec/fixtures/docker-compose.test.yml', __dir__)
+  
+  if File.exist?(compose_file)
+    puts 'Starting test database containers...'
+    system("docker-compose -f #{compose_file} up -d")
+    
+    # Wait for containers to be ready
+    puts 'Waiting for containers to be ready...'
+    sleep(15)
+    
+    puts 'Test environment ready!'
+  else
+    puts 'Test compose file not found, skipping container setup'
+  end
+end
+
+# Task to cleanup test environment
+task :test_cleanup do
+  puts 'Cleaning up test environment...'
+  
+  compose_file = File.expand_path('spec/fixtures/docker-compose.test.yml', __dir__)
+  
+  if File.exist?(compose_file)
+    puts 'Stopping test database containers...'
+    system("docker-compose -f #{compose_file} down -v")
+    puts 'Test cleanup complete!'
+  end
+end
+
+# Task to run full test suite with setup and cleanup
+task :test_full do
+  begin
+    Rake::Task[:test_setup].invoke
+    Rake::Task[:coverage].invoke
+  ensure
+    Rake::Task[:test_cleanup].invoke
+  end
+end
+
+# Task to install dependencies
+task :install do
+  puts 'Installing dependencies...'
+  system('bundle install')
+  puts 'Dependencies installed!'
+end
+
+# Task to update dependencies
+task :update do
+  puts 'Updating dependencies...'
+  system('bundle update')
+  puts 'Dependencies updated!'
+end
+
+# Task to run linting (if available)
+task :lint do
+  puts 'Running code linting...'
+  
+  # Check if rubocop is available
+  if system('which rubocop > /dev/null 2>&1')
+    system('rubocop')
+  else
+    puts 'Rubocop not available, skipping linting'
+  end
+end
+
+# Task to show test coverage report
+task :coverage_report do
+  coverage_file = File.expand_path('coverage/index.html', __dir__)
+  
+  if File.exist?(coverage_file)
+    puts "Opening coverage report: #{coverage_file}"
+    
+    # Try to open the coverage report in the default browser
+    case RbConfig::CONFIG['host_os']
+    when /darwin/i
+      system("open #{coverage_file}")
+    when /linux/i
+      system("xdg-open #{coverage_file}")
+    when /mswin|mingw|cygwin/i
+      system("start #{coverage_file}")
+    else
+      puts "Coverage report available at: #{coverage_file}"
+    end
+  else
+    puts 'No coverage report found. Run `rake coverage` first.'
+  end
+end
+
+# Help task
+task :help do
+  puts <<~HELP
+    Available tasks:
+    
+    rake install       - Install dependencies
+    rake update        - Update dependencies
+    rake spec          - Run unit tests only
+    rake integration   - Run integration tests only
+    rake spec_all      - Run all tests
+    rake coverage      - Run all tests with coverage report
+    rake test_setup    - Setup test environment (start containers)
+    rake test_cleanup  - Cleanup test environment (stop containers)
+    rake test_full     - Run full test suite with setup/cleanup
+    rake lint          - Run code linting
+    rake coverage_report - Open coverage report in browser
+    rake help          - Show this help message
+    
+    Examples:
+    rake spec                    # Quick unit tests
+    rake test_full              # Full test suite with integration tests
+    rake coverage && rake coverage_report  # Run tests and view coverage
+  HELP
+end

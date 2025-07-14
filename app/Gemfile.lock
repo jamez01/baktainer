@@ -1,16 +1,77 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    activesupport (8.0.2)
+      base64
+      benchmark (>= 0.3)
+      bigdecimal
+      concurrent-ruby (~> 1.0, >= 1.3.1)
+      connection_pool (>= 2.2.5)
+      drb
+      i18n (>= 1.6, < 2)
+      logger (>= 1.4.2)
+      minitest (>= 5.1)
+      securerandom (>= 0.3)
+      tzinfo (~> 2.0, >= 2.0.5)
+      uri (>= 0.13.1)
+    addressable (2.8.7)
+      public_suffix (>= 2.0.2, < 7.0)
     base64 (0.2.0)
+    benchmark (0.4.1)
+    bigdecimal (3.2.2)
     concurrent-ruby (1.3.5)
+    connection_pool (2.5.3)
+    crack (1.0.0)
+      bigdecimal
+      rexml
     cron_calc (1.0.0)
+    diff-lcs (1.6.2)
+    docile (1.4.1)
     docker-api (2.4.0)
       excon (>= 0.64.0)
       multi_json
+    drb (2.2.3)
     excon (1.2.5)
       logger
+    factory_bot (6.5.4)
+      activesupport (>= 6.1.0)
+    hashdiff (1.2.0)
+    i18n (1.14.7)
+      concurrent-ruby (~> 1.0)
     logger (1.7.0)
+    minitest (5.25.5)
     multi_json (1.15.0)
+    public_suffix (6.0.2)
+    rexml (3.4.1)
+    rspec (3.13.1)
+      rspec-core (~> 3.13.0)
+      rspec-expectations (~> 3.13.0)
+      rspec-mocks (~> 3.13.0)
+    rspec-core (3.13.4)
+      rspec-support (~> 3.13.0)
+    rspec-expectations (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-mocks (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-support (3.13.4)
+    rspec_junit_formatter (0.6.0)
+      rspec-core (>= 2, < 4, != 2.12.0)
+    securerandom (0.4.1)
+    simplecov (0.22.0)
+      docile (~> 1.1)
+      simplecov-html (~> 0.11)
+      simplecov_json_formatter (~> 0.1)
+    simplecov-html (0.13.1)
+    simplecov_json_formatter (0.1.4)
+    tzinfo (2.0.6)
+      concurrent-ruby (~> 1.0)
+    uri (1.0.3)
+    webmock (3.25.1)
+      addressable (>= 2.8.0)
+      crack (>= 0.3.2)
+      hashdiff (>= 0.4.0, < 2.0.0)
 
 PLATFORMS
   ruby
@@ -21,6 +82,11 @@ DEPENDENCIES
   concurrent-ruby (~> 1.3.5)
   cron_calc (~> 1.0.0)
   docker-api (~> 2.4.0)
+  factory_bot (~> 6.2)
+  rspec (~> 3.12)
+  rspec_junit_formatter (~> 0.6.0)
+  simplecov (~> 0.22.0)
+  webmock (~> 3.18)
 
 BUNDLED WITH
    2.6.2

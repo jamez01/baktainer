@@ -5,3 +5,11 @@ gem 'base64', '~> 0.2.0'
 gem 'concurrent-ruby', '~> 1.3.5'
 gem 'docker-api', '~> 2.4.0'
 gem 'cron_calc', '~> 1.0.0'
+
+group :development, :test do
+  gem 'rspec', '~> 3.12'
+  gem 'rspec_junit_formatter', '~> 0.6.0'
+  gem 'simplecov', '~> 0.22.0'
+  gem 'factory_bot', '~> 6.2'
+  gem 'webmock', '~> 3.18'
+end

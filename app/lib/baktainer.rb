@@ -49,7 +49,14 @@ class Baktainer::Runner
     @ssl_options = ssl_options
     Docker.url = @url
     setup_ssl
-    LOGGER.level = ENV['LOG_LEVEL']&.to_sym || :info
+    log_level_str = ENV['LOG_LEVEL'] || 'info'
+    LOGGER.level = case log_level_str.downcase
+                   when 'debug' then Logger::DEBUG
+                   when 'info' then Logger::INFO
+                   when 'warn' then Logger::WARN
+                   when 'error' then Logger::ERROR
+                   else Logger::INFO
+                   end
   end
 
   def perform_backup
@@ -75,11 +82,12 @@ class Baktainer::Runner
       @cron = CronCalc.new(run_at)
     rescue 
       LOGGER.error("Invalid cron format for BT_CRON: #{run_at}.")
+      @cron = CronCalc.new('0 0 * * *') # Fall back to default
     end
 
     loop do
       now = Time.now
-      next_run = @cron.next.first
+      next_run = @cron.next
       sleep_duration = next_run - now
       LOGGER.info("Sleeping for #{sleep_duration} seconds until #{next_run}.")
       sleep(sleep_duration)
@@ -93,8 +101,8 @@ class Baktainer::Runner
     return unless @ssl
 
     @cert_store = OpenSSL::X509::Store.new
-    @cerificate = OpenSSL::X509::Certificate.new(ENV['BT_CA'])
-    @cert_store.add_cert(@cerificate)
+    @certificate = OpenSSL::X509::Certificate.new(ENV['BT_CA'])
+    @cert_store.add_cert(@certificate)
     Docker.options = {
       client_cert_data: ENV['BT_CERT'],
       client_key_data: ENV['BT_KEY'],

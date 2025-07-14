@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Simple CI test runner for GitHub Actions
+echo "🧪 Running RSpec test suite for CI..."
+
+# Create tmp directory if it doesn't exist
+mkdir -p tmp
+
+# Run RSpec with progress output and JUnit XML for CI reporting
+bundle exec rspec \
+  --format progress \
+  --format RspecJunitFormatter \
+  --out tmp/rspec_results.xml
+
+echo "✅ All tests passed!"
+echo "📊 Test results saved to tmp/rspec_results.xml"

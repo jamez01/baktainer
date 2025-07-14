@@ -1,0 +1,70 @@
+services:
+  test-postgres:
+    image: postgres:17-alpine
+    container_name: baktainer-test-postgres
+    environment:
+      POSTGRES_DB: testdb
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+    ports:
+      - "5433:5432"
+    labels:
+      - baktainer.backup=true
+      - baktainer.db.engine=postgres
+      - baktainer.db.name=testdb
+      - baktainer.db.user=testuser
+      - baktainer.db.password=testpass
+      - baktainer.name=TestPostgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  test-mysql:
+    image: mysql:8.0
+    container_name: baktainer-test-mysql
+    environment:
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: testuser
+      MYSQL_PASSWORD: testpass
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "3307:3306"
+    labels:
+      - baktainer.backup=true
+      - baktainer.db.engine=mysql
+      - baktainer.db.name=testdb
+      - baktainer.db.user=testuser
+      - baktainer.db.password=testpass
+      - baktainer.name=TestMySQL
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "testuser", "-ptestpass"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  test-sqlite:
+    image: alpine:latest
+    container_name: baktainer-test-sqlite
+    command: sh -c "touch /data/test.db && tail -f /dev/null"
+    volumes:
+      - sqlite_data:/data
+    labels:
+      - baktainer.backup=true
+      - baktainer.db.engine=sqlite
+      - baktainer.db.name=/data/test.db
+      - baktainer.name=TestSQLite
+
+  test-no-backup:
+    image: postgres:17-alpine
+    container_name: baktainer-test-no-backup
+    environment:
+      POSTGRES_DB: nodb
+      POSTGRES_USER: nouser
+      POSTGRES_PASSWORD: nopass
+    ports:
+      - "5434:5432"
+
+volumes:
+  sqlite_data:

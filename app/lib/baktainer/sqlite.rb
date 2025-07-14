@@ -2,12 +2,10 @@
 
 # sqlite backup command generator
 class Baktainer::BackupCommand
-  class << self
-    def sqlite(database:, _login: nil, _password: nil)
-      {
-        env: [],
-        cmd: ['sqlite3', database, '.dump']
-      }
-    end
+  def sqlite(database:, login: nil, password: nil)
+    {
+      env: [],
+      cmd: ['sqlite3', database, '.dump']
+    }
   end
 end

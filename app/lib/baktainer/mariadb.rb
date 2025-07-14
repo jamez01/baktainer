@@ -5,7 +5,7 @@ class Baktainer::BackupCommand
     def mariadb(login:, password:, database:)
       {
         env: [],
-        cmd: ['mariadb-dump', "-u#{login}", "-p#{password}", '--databases', database]
+        cmd: ['mysqldump', '-u', login, "-p#{password}", database]
       }
     end
 end
