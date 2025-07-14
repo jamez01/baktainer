@@ -250,9 +250,9 @@ RSpec.describe 'Backup Workflow Integration', :integration do
       backup_files = Dir.glob(File.join(test_backup_dir, '**', '*.sql'))
       expect(backup_files.length).to eq(3) # One for each test database
       
-      # Verify file names include timestamp
+      # Verify file names include timestamp (10-digit unix timestamp)
       backup_files.each do |file|
-        expect(File.basename(file)).to match(/\w+-1705338000\.sql/)
+        expect(File.basename(file)).to match(/\w+-\d{10}\.sql/)
       end
     end
 

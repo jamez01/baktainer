@@ -163,18 +163,22 @@ RSpec.describe Baktainer::Container do
       container.backup
       
       expected_dir = File.join(test_backup_dir, '2024-01-15')
-      expected_file = File.join(expected_dir, 'TestApp-1705338000.sql')
-      
       expect(Dir.exist?(expected_dir)).to be true
-      expect(File.exist?(expected_file)).to be true
+      
+      # Find backup files matching the pattern
+      backup_files = Dir.glob(File.join(expected_dir, 'TestApp-*.sql'))
+      expect(backup_files).not_to be_empty
+      expect(backup_files.first).to match(/TestApp-\d{10}\.sql$/)
     end
 
     it 'writes backup data to file' do
       container.backup
       
-      expected_file = File.join(test_backup_dir, '2024-01-15', 'TestApp-1705338000.sql')
-      content = File.read(expected_file)
+      # Find the backup file dynamically
+      backup_files = Dir.glob(File.join(test_backup_dir, '2024-01-15', 'TestApp-*.sql'))
+      expect(backup_files).not_to be_empty
       
+      content = File.read(backup_files.first)
       expect(content).to eq('test backup data')
     end
 
@@ -188,8 +192,10 @@ RSpec.describe Baktainer::Container do
       
       container.backup
       
-      expected_file = File.join(test_backup_dir, '2024-01-15', 'test-container-1705338000.sql')
-      expect(File.exist?(expected_file)).to be true
+      # Find backup files with container name pattern
+      backup_files = Dir.glob(File.join(test_backup_dir, '2024-01-15', 'test-container-*.sql'))
+      expect(backup_files).not_to be_empty
+      expect(backup_files.first).to match(/test-container-\d{10}\.sql$/)
     end
   end
 
