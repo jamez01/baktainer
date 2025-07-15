@@ -17,6 +17,7 @@ class Baktainer::HealthCheckServer < Sinatra::Base
   configure do
     set :environment, :production
     set :logging, false  # We'll handle logging ourselves
+    set :server, 'puma'
     set :port, ENV['BT_HEALTH_PORT'] || 8080
     set :bind, ENV['BT_HEALTH_BIND'] || '0.0.0.0'
   end

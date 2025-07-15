@@ -26,7 +26,14 @@ class HealthServerRunner
     @logger.info("  GET /metrics - Prometheus metrics")
     
     begin
-      @health_server.run!(host: bind, port: port.to_i)
+      # Use Rack to run the Sinatra app
+      require 'rack'
+      require 'puma'
+      
+      # Start Puma server with Rack
+      server = Puma::Server.new(@health_server)
+      server.add_tcp_listener(bind, port.to_i)
+      server.run.join
     rescue Interrupt
       @logger.info("Health check server stopped")
     rescue => e

@@ -4,11 +4,15 @@ services:
     image: jamez001/baktainer:latest
     container_name: baktainer
     restart: unless-stopped
+    ports:
+      - "8080:8080"
     volumes:
       - ./backups:/backups
       - ./config:/config
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      - BT_HEALTH_SERVER_ENABLED=true
+      - BT_HEALTH_PORT=8080
       - "BT_DOCKER_URL=unix:///var/run/docker.sock"
       - BT_CRON=0 0 * * * # Backup every day at midnight
       - BT_THREADS=4 # Number of threads to use for backups

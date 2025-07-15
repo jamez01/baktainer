@@ -34,7 +34,6 @@ end
 require 'docker-api'
 require 'cron_calc'
 require 'concurrent/executor/fixed_thread_pool'
-require 'baktainer/logger'
 require 'baktainer/container'
 require 'baktainer/backup_command'
 require 'baktainer/dependency_container'
@@ -146,14 +145,20 @@ class Baktainer::Runner
     run_at = ENV['BT_CRON'] || '0 0 * * *'
     begin
       @cron = CronCalc.new(run_at)
-    rescue 
-      LOGGER.error("Invalid cron format for BT_CRON: #{run_at}.")
+    rescue => e
+      @logger.error("Invalid cron format for BT_CRON: #{run_at}. Error: #{e.message}")
       @cron = CronCalc.new('0 0 * * *') # Fall back to default
     end
 
     loop do
       now = Time.now
-      next_run = @cron.next
+      # CronCalc.next returns an array, get the first element
+      next_runs = @cron.next(now)
+      next_run = next_runs.is_a?(Array) ? next_runs.first : next_runs
+      
+      # Convert to Time object if necessary
+      next_run = Time.at(next_run) if next_run.is_a?(Numeric)
+      
       sleep_duration = next_run - now
       @logger.info("Sleeping for #{sleep_duration} seconds until #{next_run}.")
       sleep(sleep_duration)
@@ -323,14 +328,24 @@ class Baktainer::Runner
   def start_health_server
     @health_server_thread = Thread.new do
       begin
-        health_server = @dependency_container.get(:health_check_server)
         port = ENV['BT_HEALTH_PORT'] || 8080
         bind = ENV['BT_HEALTH_BIND'] || '0.0.0.0'
         
         @logger.info("Starting health check server on #{bind}:#{port}")
-        health_server.run!(host: bind, port: port.to_i)
+        
+        # Use Rack to run the Sinatra app
+        require 'rack'
+        require 'puma'
+        
+        app = Baktainer::HealthCheckServer.new(@dependency_container)
+        
+        # Start Puma server with Rack
+        server = Puma::Server.new(app)
+        server.add_tcp_listener(bind, port.to_i)
+        server.run.join
       rescue => e
         @logger.error("Health check server error: #{e.message}")
+        @logger.debug(e.backtrace.join("\n"))
       end
     end
     
