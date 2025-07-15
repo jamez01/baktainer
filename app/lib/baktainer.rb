@@ -37,43 +37,109 @@ require 'concurrent/executor/fixed_thread_pool'
 require 'baktainer/logger'
 require 'baktainer/container'
 require 'baktainer/backup_command'
+require 'baktainer/dependency_container'
 
 STDOUT.sync = true
 
 
 class Baktainer::Runner
   def initialize(url: 'unix:///var/run/docker.sock', ssl: false, ssl_options: {}, threads: 5)
-    @pool = Concurrent::FixedThreadPool.new(threads)
+    @dependency_container = Baktainer::DependencyContainer.new.configure
+    @logger = @dependency_container.get(:logger)
+    @pool = @dependency_container.get(:thread_pool)
+    @backup_monitor = @dependency_container.get(:backup_monitor)
+    @backup_rotation = @dependency_container.get(:backup_rotation)
     @url = url
     @ssl = ssl
     @ssl_options = ssl_options
     Docker.url = @url
-    setup_ssl
-    log_level_str = ENV['LOG_LEVEL'] || 'info'
-    LOGGER.level = case log_level_str.downcase
-                   when 'debug' then Logger::DEBUG
-                   when 'info' then Logger::INFO
-                   when 'warn' then Logger::WARN
-                   when 'error' then Logger::ERROR
-                   else Logger::INFO
-                   end
+    
+    # Initialize Docker client through dependency container if SSL is enabled
+    if @ssl
+      @dependency_container.get(:docker_client)
+    end
+    
+    # Start health check server if enabled
+    start_health_server if ENV['BT_HEALTH_SERVER_ENABLED'] == 'true'
   end
 
   def perform_backup
-    LOGGER.info('Starting backup process.')
-    LOGGER.debug('Docker Searching for containers.')
-    Baktainer::Containers.find_all.each do |container|
-      @pool.post do
+    @logger.info('Starting backup process.')
+    
+    # Perform health check before backup
+    unless docker_health_check
+      @logger.error('Docker connection health check failed. Aborting backup.')
+      return { successful: [], failed: [], total: 0, error: 'Docker connection failed' }
+    end
+    
+    @logger.debug('Docker Searching for containers.')
+    
+    containers = Baktainer::Containers.find_all(@dependency_container)
+    backup_futures = []
+    backup_results = {
+      successful: [],
+      failed: [],
+      total: containers.size
+    }
+    
+    containers.each do |container|
+      future = @pool.post do
         begin
-          LOGGER.info("Backing up container #{container.name} with engine #{container.engine}.")
-          container.backup
-          LOGGER.info("Backup completed for container #{container.name}.")
+          @logger.info("Backing up container #{container.name} with engine #{container.engine}.")
+          @backup_monitor.start_backup(container.name, container.engine)
+          
+          backup_path = container.backup
+          
+          @backup_monitor.complete_backup(container.name, backup_path)
+          @logger.info("Backup completed for container #{container.name}.")
+          { container: container.name, status: :success, path: backup_path }
         rescue StandardError => e
-          LOGGER.error("Error backing up container #{container.name}: #{e.message}")
-          LOGGER.debug(e.backtrace.join("\n"))
+          @backup_monitor.fail_backup(container.name, e.message)
+          @logger.error("Error backing up container #{container.name}: #{e.message}")
+          @logger.debug(e.backtrace.join("\n"))
+          { container: container.name, status: :failed, error: e.message }
         end
       end
+      backup_futures << future
     end
+    
+    # Wait for all backups to complete and collect results
+    backup_futures.each do |future|
+      begin
+        result = future.value  # This will block until the future completes
+        if result[:status] == :success
+          backup_results[:successful] << result
+        else
+          backup_results[:failed] << result
+        end
+      rescue StandardError => e
+        @logger.error("Thread pool error: #{e.message}")
+        backup_results[:failed] << { container: 'unknown', status: :failed, error: e.message }
+      end
+    end
+    
+    # Log summary and metrics
+    @logger.info("Backup process completed. Success: #{backup_results[:successful].size}, Failed: #{backup_results[:failed].size}, Total: #{backup_results[:total]}")
+    
+    # Log metrics summary
+    metrics = @backup_monitor.get_metrics_summary
+    @logger.info("Overall metrics: success_rate=#{metrics[:success_rate]}%, total_data=#{format_bytes(metrics[:total_data_backed_up])}")
+    
+    # Log failed backups for monitoring
+    backup_results[:failed].each do |failure|
+      @logger.error("Failed backup for #{failure[:container]}: #{failure[:error]}")
+    end
+    
+    # Run backup rotation/cleanup if enabled
+    if ENV['BT_ROTATION_ENABLED'] != 'false'
+      @logger.info('Running backup rotation and cleanup')
+      cleanup_results = @backup_rotation.cleanup
+      if cleanup_results[:deleted_count] > 0
+        @logger.info("Cleaned up #{cleanup_results[:deleted_count]} old backups, freed #{format_bytes(cleanup_results[:deleted_size])}")
+      end
+    end
+    
+    backup_results
   end
 
   def run
@@ -89,13 +155,26 @@ class Baktainer::Runner
       now = Time.now
       next_run = @cron.next
       sleep_duration = next_run - now
-      LOGGER.info("Sleeping for #{sleep_duration} seconds until #{next_run}.")
+      @logger.info("Sleeping for #{sleep_duration} seconds until #{next_run}.")
       sleep(sleep_duration)
       perform_backup
     end
   end
 
   private
+
+  def format_bytes(bytes)
+    units = ['B', 'KB', 'MB', 'GB']
+    unit_index = 0
+    size = bytes.to_f
+    
+    while size >= 1024 && unit_index < units.length - 1
+      size /= 1024
+      unit_index += 1
+    end
+    
+    "#{size.round(2)} #{units[unit_index]}"
+  end
 
   def setup_ssl
     return unless @ssl
@@ -123,9 +202,9 @@ class Baktainer::Runner
         scheme: 'https'
       }
       
-      LOGGER.info("SSL/TLS configuration completed successfully")
+      @logger.info("SSL/TLS configuration completed successfully")
     rescue => e
-      LOGGER.error("Failed to configure SSL/TLS: #{e.message}")
+      @logger.error("Failed to configure SSL/TLS: #{e.message}")
       raise SecurityError, "SSL/TLS configuration failed: #{e.message}"
     end
   end
@@ -147,9 +226,9 @@ class Baktainer::Runner
     # Support both file paths and direct certificate data
     if File.exist?(ca_data)
       ca_data = File.read(ca_data)
-      LOGGER.debug("Loaded CA certificate from file: #{ENV['BT_CA']}")
+      @logger.debug("Loaded CA certificate from file: #{ENV['BT_CA']}")
     else
-      LOGGER.debug("Using CA certificate data from environment variable")
+      @logger.debug("Using CA certificate data from environment variable")
     end
     
     OpenSSL::X509::Certificate.new(ca_data)
@@ -168,12 +247,12 @@ class Baktainer::Runner
     # Support both file paths and direct certificate data
     if File.exist?(cert_data)
       cert_data = File.read(cert_data)
-      LOGGER.debug("Loaded client certificate from file: #{ENV['BT_CERT']}")
+      @logger.debug("Loaded client certificate from file: #{ENV['BT_CERT']}")
     end
     
     if File.exist?(key_data)
       key_data = File.read(key_data)
-      LOGGER.debug("Loaded client key from file: #{ENV['BT_KEY']}")
+      @logger.debug("Loaded client key from file: #{ENV['BT_KEY']}")
     end
     
     # Validate certificate and key
@@ -204,5 +283,67 @@ class Baktainer::Runner
     raise SecurityError, "Certificate file not found: #{e.message}"
   rescue => e
     raise SecurityError, "Failed to load client certificates: #{e.message}"
+  end
+
+  def verify_docker_connection
+    begin
+      @logger.debug("Verifying Docker connection to #{@url}")
+      Docker.version
+      @logger.info("Docker connection verified successfully")
+    rescue Docker::Error::DockerError => e
+      raise StandardError, "Docker connection failed: #{e.message}"
+    rescue StandardError => e
+      raise StandardError, "Docker connection error: #{e.message}"
+    end
+  end
+
+  def docker_health_check
+    begin
+      # Check Docker daemon version
+      version_info = Docker.version
+      @logger.debug("Docker daemon version: #{version_info['Version']}")
+      
+      # Check if we can list containers
+      Docker::Container.all(limit: 1)
+      @logger.debug("Docker health check passed")
+      
+      true
+    rescue Docker::Error::TimeoutError => e
+      @logger.error("Docker health check failed - timeout: #{e.message}")
+      false
+    rescue Docker::Error::DockerError => e
+      @logger.error("Docker health check failed - Docker error: #{e.message}")
+      false
+    rescue StandardError => e
+      @logger.error("Docker health check failed - system error: #{e.message}")
+      false
+    end
+  end
+
+  def start_health_server
+    @health_server_thread = Thread.new do
+      begin
+        health_server = @dependency_container.get(:health_check_server)
+        port = ENV['BT_HEALTH_PORT'] || 8080
+        bind = ENV['BT_HEALTH_BIND'] || '0.0.0.0'
+        
+        @logger.info("Starting health check server on #{bind}:#{port}")
+        health_server.run!(host: bind, port: port.to_i)
+      rescue => e
+        @logger.error("Health check server error: #{e.message}")
+      end
+    end
+    
+    # Give the server a moment to start
+    sleep 0.5
+    @logger.info("Health check server started in background thread")
+  end
+
+  def stop_health_server
+    if @health_server_thread
+      @health_server_thread.kill
+      @health_server_thread = nil
+      @logger.info("Health check server stopped")
+    end
   end
 end

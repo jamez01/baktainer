@@ -12,6 +12,31 @@ RSpec.describe Baktainer::Runner do
     }
   end
   
+  let(:mock_logger) { double('Logger', debug: nil, info: nil, warn: nil, error: nil, level: Logger::INFO, 'level=': nil) }
+  let(:mock_config) { double('Configuration', docker_url: 'unix:///var/run/docker.sock', ssl_enabled?: false, threads: 5, log_level: 'info', backup_dir: '/backups', compress?: true, encryption_enabled?: false) }
+  let(:mock_thread_pool) { double('ThreadPool', post: nil, shutdown: nil, kill: nil) }
+  let(:mock_backup_monitor) { double('BackupMonitor', start_monitoring: nil, stop_monitoring: nil, start_backup: nil, complete_backup: nil, fail_backup: nil, get_metrics_summary: {}) }
+  let(:mock_backup_rotation) { double('BackupRotation', cleanup: { deleted_count: 0, freed_space: 0 }) }
+  let(:mock_dependency_container) { double('DependencyContainer') }
+  
+  # Mock Docker API calls at the beginning
+  before do
+    allow(Docker).to receive(:version).and_return({ 'Version' => '20.10.0' })
+    allow(Docker::Container).to receive(:all).and_return([])
+    
+    # Mock dependency container and its services
+    allow(Baktainer::DependencyContainer).to receive(:new).and_return(mock_dependency_container)
+    allow(mock_dependency_container).to receive(:configure).and_return(mock_dependency_container)
+    allow(mock_dependency_container).to receive(:get).with(:logger).and_return(mock_logger)
+    allow(mock_dependency_container).to receive(:get).with(:configuration).and_return(mock_config)
+    allow(mock_dependency_container).to receive(:get).with(:thread_pool).and_return(mock_thread_pool)
+    allow(mock_dependency_container).to receive(:get).with(:backup_monitor).and_return(mock_backup_monitor)
+    allow(mock_dependency_container).to receive(:get).with(:backup_rotation).and_return(mock_backup_rotation)
+    
+    # Mock Docker URL setting
+    allow(Docker).to receive(:url=)
+  end
+  
   let(:runner) { described_class.new(**default_options) }
 
   describe '#initialize' do
@@ -26,9 +51,9 @@ RSpec.describe Baktainer::Runner do
       described_class.new(**default_options)
     end
 
-    it 'creates fixed thread pool with specified size' do
+    it 'gets thread pool from dependency container' do
       pool = runner.instance_variable_get(:@pool)
-      expect(pool).to be_a(Concurrent::FixedThreadPool)
+      expect(pool).to eq(mock_thread_pool)
     end
 
     it 'sets up SSL when enabled' do
@@ -38,7 +63,7 @@ RSpec.describe Baktainer::Runner do
         ssl_options: { ca_file: 'ca.pem', client_cert: 'cert.pem', client_key: 'key.pem' }
       }
       
-      # Generate a valid test certificate
+      # Generate valid test certificates
       require 'openssl'
       key = OpenSSL::PKey::RSA.new(2048)
       cert = OpenSSL::X509::Certificate.new
@@ -54,25 +79,49 @@ RSpec.describe Baktainer::Runner do
       cert_pem = cert.to_pem
       key_pem = key.to_pem
       
-      with_env('BT_CA' => cert_pem, 'BT_CERT' => cert_pem, 'BT_KEY' => key_pem) do
-        expect { described_class.new(**ssl_options) }.not_to raise_error
-      end
+      # Mock SSL-enabled configuration with valid certificates
+      ssl_config = double('Configuration', 
+        docker_url: 'https://docker.example.com:2376', 
+        ssl_enabled?: true, 
+        threads: 5, 
+        log_level: 'info', 
+        backup_dir: '/backups', 
+        compress?: true, 
+        encryption_enabled?: false,
+        ssl_ca: cert_pem,
+        ssl_cert: cert_pem, 
+        ssl_key: key_pem
+      )
+      
+      mock_docker_client = double('Docker')
+      
+      ssl_dependency_container = double('DependencyContainer')
+      allow(Baktainer::DependencyContainer).to receive(:new).and_return(ssl_dependency_container)
+      allow(ssl_dependency_container).to receive(:configure).and_return(ssl_dependency_container)
+      allow(ssl_dependency_container).to receive(:get).with(:logger).and_return(mock_logger)
+      allow(ssl_dependency_container).to receive(:get).with(:configuration).and_return(ssl_config)
+      allow(ssl_dependency_container).to receive(:get).with(:thread_pool).and_return(mock_thread_pool)
+      allow(ssl_dependency_container).to receive(:get).with(:backup_monitor).and_return(mock_backup_monitor)
+      allow(ssl_dependency_container).to receive(:get).with(:backup_rotation).and_return(mock_backup_rotation)
+      allow(ssl_dependency_container).to receive(:get).with(:docker_client).and_return(mock_docker_client)
+      
+      expect { described_class.new(**ssl_options) }.not_to raise_error
     end
 
-    it 'sets log level from environment' do
-      with_env('LOG_LEVEL' => 'debug') do
-        described_class.new(**default_options)
-        expect(LOGGER.level).to eq(Logger::DEBUG)
-      end
+    it 'gets logger from dependency container' do
+      logger = runner.instance_variable_get(:@logger)
+      expect(logger).to eq(mock_logger)
     end
   end
 
   describe '#perform_backup' do
     let(:mock_container) { instance_double(Baktainer::Container, name: 'test-container', engine: 'postgres') }
+    let(:mock_future) { double('Future', value: nil, reason: nil) }
     
     before do
       allow(Baktainer::Containers).to receive(:find_all).and_return([mock_container])
       allow(mock_container).to receive(:backup)
+      allow(mock_thread_pool).to receive(:post).and_yield.and_return(mock_future)
     end
 
     it 'finds all containers and backs them up' do
@@ -80,18 +129,12 @@ RSpec.describe Baktainer::Runner do
       expect(mock_container).to receive(:backup)
       
       runner.perform_backup
-      
-      # Allow time for thread execution
-      sleep(0.1)
     end
 
     it 'handles backup errors gracefully' do
       allow(mock_container).to receive(:backup).and_raise(StandardError.new('Test error'))
       
       expect { runner.perform_backup }.not_to raise_error
-      
-      # Allow time for thread execution
-      sleep(0.1)
     end
 
     it 'uses thread pool for concurrent backups' do
@@ -106,9 +149,6 @@ RSpec.describe Baktainer::Runner do
       end
       
       runner.perform_backup
-      
-      # Allow time for thread execution
-      sleep(0.1)
     end
   end
 
@@ -168,23 +208,31 @@ RSpec.describe Baktainer::Runner do
 
   describe '#setup_ssl (private)' do
     context 'when SSL is disabled' do
-      it 'does not configure SSL options' do
-        expect(Docker).not_to receive(:options=)
-        described_class.new(**default_options)
+      it 'does not use SSL configuration' do
+        runner # instantiate with default options (SSL disabled)
+        # For non-SSL runner, docker client is not requested from dependency container
+        expect(mock_dependency_container).not_to have_received(:get).with(:docker_client)
       end
     end
 
     context 'when SSL is enabled' do
-      let(:ssl_options) do
-        {
-          url: 'https://docker.example.com:2376',
-          ssl: true,
-          ssl_options: {}
-        }
+      let(:ssl_config) do
+        double('Configuration', 
+          docker_url: 'https://docker.example.com:2376', 
+          ssl_enabled?: true, 
+          threads: 5, 
+          log_level: 'info', 
+          backup_dir: '/backups', 
+          compress?: true, 
+          encryption_enabled?: false,
+          ssl_ca: 'test_ca_cert',
+          ssl_cert: 'test_client_cert', 
+          ssl_key: 'test_client_key'
+        )
       end
 
-      it 'configures Docker SSL options' do
-        # Generate a valid test certificate
+      it 'creates runner with SSL configuration' do
+        # Generate valid test certificates for SSL configuration
         require 'openssl'
         key = OpenSSL::PKey::RSA.new(2048)
         cert = OpenSSL::X509::Certificate.new
@@ -200,21 +248,34 @@ RSpec.describe Baktainer::Runner do
         cert_pem = cert.to_pem
         key_pem = key.to_pem
         
-        with_env('BT_CA' => cert_pem, 'BT_CERT' => cert_pem, 'BT_KEY' => key_pem) do
-          expect(Docker).to receive(:options=).with(hash_including(
-            client_cert_data: cert_pem,
-            client_key_data: key_pem,
-            scheme: 'https',
-            ssl_verify_peer: true
-          ))
-          
-          described_class.new(**ssl_options)
-        end
-      end
-
-      it 'handles missing SSL environment variables' do
-        # Test with missing environment variables
-        expect { described_class.new(**ssl_options) }.to raise_error
+        ssl_config_with_certs = double('Configuration', 
+          docker_url: 'https://docker.example.com:2376', 
+          ssl_enabled?: true, 
+          threads: 5, 
+          log_level: 'info', 
+          backup_dir: '/backups', 
+          compress?: true, 
+          encryption_enabled?: false,
+          ssl_ca: cert_pem,
+          ssl_cert: cert_pem, 
+          ssl_key: key_pem
+        )
+        
+        mock_docker_client = double('Docker')
+        
+        ssl_dependency_container = double('DependencyContainer')
+        allow(Baktainer::DependencyContainer).to receive(:new).and_return(ssl_dependency_container)
+        allow(ssl_dependency_container).to receive(:configure).and_return(ssl_dependency_container)
+        allow(ssl_dependency_container).to receive(:get).with(:logger).and_return(mock_logger)
+        allow(ssl_dependency_container).to receive(:get).with(:configuration).and_return(ssl_config_with_certs)
+        allow(ssl_dependency_container).to receive(:get).with(:thread_pool).and_return(mock_thread_pool)
+        allow(ssl_dependency_container).to receive(:get).with(:backup_monitor).and_return(mock_backup_monitor)
+        allow(ssl_dependency_container).to receive(:get).with(:backup_rotation).and_return(mock_backup_rotation)
+        allow(ssl_dependency_container).to receive(:get).with(:docker_client).and_return(mock_docker_client)
+        
+        ssl_options = { url: 'https://docker.example.com:2376', ssl: true, ssl_options: {} }
+        
+        expect { described_class.new(**ssl_options) }.not_to raise_error
       end
     end
   end

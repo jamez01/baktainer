@@ -38,6 +38,7 @@ For enhanced security, consider using a Docker socket proxy. See [SECURITY.md](S
 | BT_CRON | Cron expression for scheduling backups | 0 0 * * * |
 | BT_THREADS | Number of threads to use for backups | 4 |
 | BT_LOG_LEVEL | Log level (debug, info, warn, error) | info |
+| BT_COMPRESS | Enable gzip compression for backups | true |
 | BT_SSL | Enable SSL for docker connection | false |
 | BT_CA | Path to CA certificate | none |
 | BT_CERT | Path to client certificate | none |
@@ -76,13 +77,16 @@ services:
 | baktainer.db.user | Username for the database |
 | baktainer.db.password | Password for the database |
 | baktainer.name | Name of the application (optional). Determines name of sql dump file. |
+| baktainer.compress | Enable gzip compression for this container's backups (true/false). Overrides BT_COMPRESS. |
 
 ## Backup Files
 The backup files will be stored in the directory specified by the `BT_BACKUP_DIR` environment variable. The files will be named according to the following format:
 ```
-/backups/<date>/<db_name>-<timestamp>.sql
+/backups/<date>/<db_name>-<timestamp>.sql.gz
 ```
 Where `<date>` is the date of the backup ('YY-MM-DD' format) `<db_name>` is the name provided by baktainer.name, or the name of the database, `<timestamp>` is the unix timestamp of the backup.
+
+By default, backups are compressed with gzip. To disable compression, set `BT_COMPRESS=false` or add `baktainer.compress=false` label to specific containers.
 
 ## Testing
 

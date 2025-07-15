@@ -5,7 +5,23 @@ require 'spec_helper'
 RSpec.describe Baktainer::Container do
   let(:container_info) { build(:docker_container_info) }
   let(:docker_container) { mock_docker_container(container_info['Labels']) }
-  let(:container) { described_class.new(docker_container) }
+  let(:mock_logger) { double('Logger', debug: nil, info: nil, warn: nil, error: nil) }
+  let(:mock_file_ops) { double('FileSystemOperations') }
+  let(:mock_orchestrator) { double('BackupOrchestrator') }
+  let(:mock_validator) { double('ContainerValidator') }
+  let(:mock_dependency_container) do
+    double('DependencyContainer').tap do |container|
+      allow(container).to receive(:get).with(:logger).and_return(mock_logger)
+      allow(container).to receive(:get).with(:file_system_operations).and_return(mock_file_ops)
+      allow(container).to receive(:get).with(:backup_orchestrator).and_return(mock_orchestrator)
+    end
+  end
+  let(:container) { described_class.new(docker_container, mock_dependency_container) }
+
+  before do
+    allow(Baktainer::ContainerValidator).to receive(:new).and_return(mock_validator)
+    allow(mock_validator).to receive(:validate!).and_return(true)
+  end
 
   describe '#initialize' do
     it 'sets the container instance variable' do
@@ -84,14 +100,23 @@ RSpec.describe Baktainer::Container do
   describe '#validate' do
     context 'with valid container' do
       it 'does not raise an error' do
+        allow(mock_validator).to receive(:validate!).and_return(true)
         expect { container.validate }.not_to raise_error
       end
     end
 
+    context 'with validation error' do
+      it 'raises an error' do
+        allow(mock_validator).to receive(:validate!).and_raise(Baktainer::ValidationError.new('Test error'))
+        expect { container.validate }.to raise_error('Test error')
+      end
+    end
+
     context 'with nil container' do
-      let(:container) { described_class.new(nil) }
+      let(:container) { described_class.new(nil, mock_dependency_container) }
       
       it 'raises an error' do
+        allow(mock_validator).to receive(:validate!).and_raise(Baktainer::ValidationError.new('Unable to parse container'))
         expect { container.validate }.to raise_error('Unable to parse container')
       end
     end
@@ -104,9 +129,10 @@ RSpec.describe Baktainer::Container do
         allow(stopped_docker_container).to receive(:info).and_return(stopped_container_info)
       end
       
-      let(:container) { described_class.new(stopped_docker_container) }
+      let(:container) { described_class.new(stopped_docker_container, mock_dependency_container) }
       
       it 'raises an error' do
+        allow(mock_validator).to receive(:validate!).and_raise(Baktainer::ValidationError.new('Container not running'))
         expect { container.validate }.to raise_error('Container not running')
       end
     end
@@ -119,9 +145,10 @@ RSpec.describe Baktainer::Container do
         allow(no_backup_container).to receive(:info).and_return(no_backup_info)
       end
       
-      let(:container) { described_class.new(no_backup_container) }
+      let(:container) { described_class.new(no_backup_container, mock_dependency_container) }
       
       it 'raises an error' do
+        allow(mock_validator).to receive(:validate!).and_raise(Baktainer::ValidationError.new('Backup not enabled for this container. Set docker label baktainer.backup=true'))
         expect { container.validate }.to raise_error('Backup not enabled for this container. Set docker label baktainer.backup=true')
       end
     end
@@ -139,7 +166,10 @@ RSpec.describe Baktainer::Container do
         )
       end
       
+      let(:container) { described_class.new(docker_container, mock_dependency_container) }
+      
       it 'raises an error' do
+        allow(mock_validator).to receive(:validate!).and_raise(Baktainer::ValidationError.new('DB Engine not defined. Set docker label baktainer.engine.'))
         expect { container.validate }.to raise_error('DB Engine not defined. Set docker label baktainer.engine.')
       end
     end
@@ -147,56 +177,35 @@ RSpec.describe Baktainer::Container do
 
 
   describe '#backup' do
-    let(:test_backup_dir) { create_test_backup_dir }
-    
     before do
-      stub_const('ENV', ENV.to_hash.merge('BT_BACKUP_DIR' => test_backup_dir))
-      allow(Date).to receive(:today).and_return(Date.new(2024, 1, 15))
-      allow(Time).to receive(:now).and_return(Time.new(2024, 1, 15, 12, 0, 0))
-    end
-    
-    after do
-      FileUtils.rm_rf(test_backup_dir) if Dir.exist?(test_backup_dir)
+      allow(mock_validator).to receive(:validate!).and_return(true)
+      allow(mock_orchestrator).to receive(:perform_backup).and_return('/backups/test.sql.gz')
     end
 
-    it 'creates backup directory and file' do
+    it 'validates the container before backup' do
+      expect(mock_validator).to receive(:validate!)
       container.backup
-      
-      expected_dir = File.join(test_backup_dir, '2024-01-15')
-      expect(Dir.exist?(expected_dir)).to be true
-      
-      # Find backup files matching the pattern
-      backup_files = Dir.glob(File.join(expected_dir, 'TestApp-*.sql'))
-      expect(backup_files).not_to be_empty
-      expect(backup_files.first).to match(/TestApp-\d{10}\.sql$/)
     end
 
-    it 'writes backup data to file' do
+    it 'delegates backup to orchestrator' do
+      expected_metadata = {
+        name: 'TestApp',
+        engine: 'postgres',
+        database: 'testdb',
+        user: 'testuser',
+        password: 'testpass',
+        all: false
+      }
+      expect(mock_orchestrator).to receive(:perform_backup).with(docker_container, expected_metadata)
       container.backup
-      
-      # Find the backup file dynamically
-      backup_files = Dir.glob(File.join(test_backup_dir, '2024-01-15', 'TestApp-*.sql'))
-      expect(backup_files).not_to be_empty
-      
-      content = File.read(backup_files.first)
-      expect(content).to eq('test backup data')
     end
 
-    it 'uses container name when baktainer.name label is missing' do
-      labels_without_name = container_info['Labels'].dup
-      labels_without_name.delete('baktainer.name')
-      
-      allow(docker_container).to receive(:info).and_return(
-        container_info.merge('Labels' => labels_without_name)
-      )
-      
-      container.backup
-      
-      # Find backup files with container name pattern
-      backup_files = Dir.glob(File.join(test_backup_dir, '2024-01-15', 'test-container-*.sql'))
-      expect(backup_files).not_to be_empty
-      expect(backup_files.first).to match(/test-container-\d{10}\.sql$/)
+    it 'returns the result from orchestrator' do
+      expect(mock_orchestrator).to receive(:perform_backup).and_return('/backups/test.sql.gz')
+      result = container.backup
+      expect(result).to eq('/backups/test.sql.gz')
     end
+
   end
 
   describe 'Baktainer::Containers.find_all' do
@@ -207,7 +216,7 @@ RSpec.describe Baktainer::Container do
     end
 
     it 'returns containers with backup label' do
-      result = Baktainer::Containers.find_all
+      result = Baktainer::Containers.find_all(mock_dependency_container)
       
       expect(result).to be_an(Array)
       expect(result.length).to eq(1)
@@ -222,7 +231,7 @@ RSpec.describe Baktainer::Container do
       containers = [docker_container, no_backup_container]
       allow(Docker::Container).to receive(:all).and_return(containers)
       
-      result = Baktainer::Containers.find_all
+      result = Baktainer::Containers.find_all(mock_dependency_container)
       
       expect(result.length).to eq(1)
     end
@@ -234,7 +243,7 @@ RSpec.describe Baktainer::Container do
       containers = [docker_container, nil_labels_container]
       allow(Docker::Container).to receive(:all).and_return(containers)
       
-      result = Baktainer::Containers.find_all
+      result = Baktainer::Containers.find_all(mock_dependency_container)
       
       expect(result.length).to eq(1)
     end

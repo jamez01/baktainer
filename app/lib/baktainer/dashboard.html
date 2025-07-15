@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baktainer Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            margin-bottom: 0.5rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .healthy { background: #27ae60; }
+        .degraded { background: #f39c12; }
+        .unhealthy { background: #e74c3c; }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #3498db;
+        }
+
+        .card h3 {
+            margin-bottom: 1rem;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: #27ae60;
+        }
+
+        .error { color: #e74c3c; }
+        .warning { color: #f39c12; }
+
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .refresh-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.3s;
+        }
+
+        .refresh-btn:hover {
+            background: #2980b9;
+        }
+
+        .loading {
+            display: none;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        .error-message {
+            background: #ffe6e6;
+            color: #c0392b;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .progress-bar {
+            background: #ecf0f1;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #27ae60;
+            transition: width 0.3s ease;
+        }
+
+        .log-container {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 1rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛡️ Baktainer Dashboard</h1>
+        <p>Database Backup Monitoring & Management</p>
+        <div style="margin-top: 1rem;">
+            <span class="status-indicator" id="system-status"></span>
+            <span id="system-status-text">Loading...</span>
+            <button class="refresh-btn" onclick="refreshAll()" style="margin-left: 1rem;">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="error-container"></div>
+        
+        <div class="grid">
+            <!-- Health Status Card -->
+            <div class="card">
+                <h3>🏥 System Health</h3>
+                <div id="health-metrics">
+                    <div class="loading">Loading health data...</div>
+                </div>
+            </div>
+
+            <!-- Backup Statistics Card -->
+            <div class="card">
+                <h3>📊 Backup Statistics</h3>
+                <div id="backup-stats">
+                    <div class="loading">Loading backup statistics...</div>
+                </div>
+            </div>
+
+            <!-- System Information Card -->
+            <div class="card">
+                <h3>💻 System Information</h3>
+                <div id="system-info">
+                    <div class="loading">Loading system information...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Backups Table -->
+        <div class="table-container">
+            <h3 style="margin-bottom: 1rem;">📋 Recent Backups</h3>
+            <div id="recent-backups">
+                <div class="loading">Loading recent backups...</div>
+            </div>
+        </div>
+
+        <!-- Container Discovery Table -->
+        <div class="table-container" style="margin-top: 2rem;">
+            <h3 style="margin-bottom: 1rem;">🐳 Discovered Containers</h3>
+            <div id="containers-list">
+                <div class="loading">Loading containers...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let refreshInterval;
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshAll();
+            startAutoRefresh();
+        });
+
+        function startAutoRefresh() {
+            refreshInterval = setInterval(refreshAll, 30000); // Refresh every 30 seconds
+        }
+
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        }
+
+        function refreshAll() {
+            Promise.all([
+                loadHealthStatus(),
+                loadBackupStatistics(),
+                loadSystemInfo(),
+                loadRecentBackups(),
+                loadContainers()
+            ]).catch(error => {
+                showError('Failed to refresh dashboard: ' + error.message);
+            });
+        }
+
+        function showError(message) {
+            const container = document.getElementById('error-container');
+            container.innerHTML = `<div class="error-message">⚠️ ${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        function formatBytes(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            let unitIndex = 0;
+            let size = bytes;
+
+            while (size >= 1024 && unitIndex < units.length - 1) {
+                size /= 1024;
+                unitIndex++;
+            }
+
+            return `${size.toFixed(2)} ${units[unitIndex]}`;
+        }
+
+        function formatDuration(seconds) {
+            if (seconds < 60) return `${seconds.toFixed(1)}s`;
+            const minutes = seconds / 60;
+            if (minutes < 60) return `${minutes.toFixed(1)}m`;
+            const hours = minutes / 60;
+            return `${hours.toFixed(1)}h`;
+        }
+
+        function timeAgo(timestamp) {
+            const now = new Date();
+            const then = new Date(timestamp);
+            const diff = now - then;
+            const minutes = Math.floor(diff / 60000);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            return `${days}d ago`;
+        }
+
+        async function loadHealthStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const health = await response.json();
+                
+                updateSystemStatus(health.status);
+                displayHealthMetrics(health);
+            } catch (error) {
+                document.getElementById('health-metrics').innerHTML = 
+                    '<div class="error">Failed to load health data</div>';
+                updateSystemStatus('error');
+            }
+        }
+
+        function updateSystemStatus(status) {
+            const indicator = document.getElementById('system-status');
+            const text = document.getElementById('system-status-text');
+            
+            indicator.className = 'status-indicator';
+            switch (status) {
+                case 'healthy':
+                    indicator.classList.add('healthy');
+                    text.textContent = 'System Healthy';
+                    break;
+                case 'degraded':
+                    indicator.classList.add('degraded');
+                    text.textContent = 'System Degraded';
+                    break;
+                case 'unhealthy':
+                case 'error':
+                    indicator.classList.add('unhealthy');
+                    text.textContent = 'System Unhealthy';
+                    break;
+                default:
+                    text.textContent = 'Status Unknown';
+            }
+        }
+
+        function displayHealthMetrics(health) {
+            const container = document.getElementById('health-metrics');
+            let html = '';
+            
+            Object.entries(health.checks || {}).forEach(([component, check]) => {
+                const statusClass = check.status === 'healthy' ? '' : 
+                                  check.status === 'warning' ? 'warning' : 'error';
+                html += `
+                    <div class="metric">
+                        <span>${component}</span>
+                        <span class="metric-value ${statusClass}">${check.status}</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html || '<div class="metric">No health checks available</div>';
+        }
+
+        async function loadBackupStatistics() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const status = await response.json();
+                
+                displayBackupStats(status.backup_metrics || {});
+            } catch (error) {
+                document.getElementById('backup-stats').innerHTML = 
+                    '<div class="error">Failed to load backup statistics</div>';
+            }
+        }
+
+        function displayBackupStats(metrics) {
+            const container = document.getElementById('backup-stats');
+            const successRate = metrics.success_rate || 0;
+            
+            const html = `
+                <div class="metric">
+                    <span>Total Attempts</span>
+                    <span class="metric-value">${metrics.total_attempts || 0}</span>
+                </div>
+                <div class="metric">
+                    <span>Successful</span>
+                    <span class="metric-value">${metrics.successful_backups || 0}</span>
+                </div>
+                <div class="metric">
+                    <span>Failed</span>
+                    <span class="metric-value ${metrics.failed_backups > 0 ? 'error' : ''}">${metrics.failed_backups || 0}</span>
+                </div>
+                <div class="metric">
+                    <span>Success Rate</span>
+                    <span class="metric-value">${successRate}%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${successRate}%"></div>
+                </div>
+                <div class="metric">
+                    <span>Total Data</span>
+                    <span class="metric-value">${formatBytes(metrics.total_data_backed_up || 0)}</span>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const status = await response.json();
+                
+                displaySystemInfo(status);
+            } catch (error) {
+                document.getElementById('system-info').innerHTML = 
+                    '<div class="error">Failed to load system information</div>';
+            }
+        }
+
+        function displaySystemInfo(status) {
+            const container = document.getElementById('system-info');
+            const info = status.system_info || {};
+            const dockerStatus = status.docker_status || {};
+            
+            const html = `
+                <div class="metric">
+                    <span>Uptime</span>
+                    <span class="metric-value">${formatDuration(status.uptime_seconds || 0)}</span>
+                </div>
+                <div class="metric">
+                    <span>Ruby Version</span>
+                    <span class="metric-value">${info.ruby_version || 'Unknown'}</span>
+                </div>
+                <div class="metric">
+                    <span>Memory Usage</span>
+                    <span class="metric-value">${info.memory_usage_mb ? info.memory_usage_mb + ' MB' : 'Unknown'}</span>
+                </div>
+                <div class="metric">
+                    <span>Docker Containers</span>
+                    <span class="metric-value">${dockerStatus.containers_running || 0}/${dockerStatus.containers_total || 0}</span>
+                </div>
+                <div class="metric">
+                    <span>Backup Containers</span>
+                    <span class="metric-value">${dockerStatus.backup_containers || 0}</span>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        async function loadRecentBackups() {
+            try {
+                const response = await fetch(`${API_BASE}/backups`);
+                const data = await response.json();
+                
+                displayRecentBackups(data.recent_backups || []);
+            } catch (error) {
+                document.getElementById('recent-backups').innerHTML = 
+                    '<div class="error">Failed to load recent backups</div>';
+            }
+        }
+
+        function displayRecentBackups(backups) {
+            const container = document.getElementById('recent-backups');
+            
+            if (backups.length === 0) {
+                container.innerHTML = '<div class="metric">No recent backups found</div>';
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Container</th>
+                            <th>Status</th>
+                            <th>Size</th>
+                            <th>Duration</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            backups.forEach(backup => {
+                const statusClass = backup.status === 'completed' ? '' : 'error';
+                html += `
+                    <tr>
+                        <td>${backup.container_name || 'Unknown'}</td>
+                        <td><span class="metric-value ${statusClass}">${backup.status || 'Unknown'}</span></td>
+                        <td>${backup.file_size ? formatBytes(backup.file_size) : '-'}</td>
+                        <td>${backup.duration ? formatDuration(backup.duration) : '-'}</td>
+                        <td>${backup.timestamp ? timeAgo(backup.timestamp) : '-'}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        async function loadContainers() {
+            try {
+                const response = await fetch(`${API_BASE}/containers`);
+                const data = await response.json();
+                
+                displayContainers(data.containers || []);
+            } catch (error) {
+                document.getElementById('containers-list').innerHTML = 
+                    '<div class="error">Failed to load containers</div>';
+            }
+        }
+
+        function displayContainers(containers) {
+            const container = document.getElementById('containers-list');
+            
+            if (containers.length === 0) {
+                container.innerHTML = '<div class="metric">No containers with backup labels found</div>';
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Engine</th>
+                            <th>Database</th>
+                            <th>State</th>
+                            <th>Container ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            containers.forEach(cont => {
+                const stateClass = cont.state && cont.state.Running ? '' : 'warning';
+                html += `
+                    <tr>
+                        <td>${cont.name || 'Unknown'}</td>
+                        <td>${cont.engine || 'Unknown'}</td>
+                        <td>${cont.database || 'Unknown'}</td>
+                        <td><span class="metric-value ${stateClass}">${cont.state && cont.state.Running ? 'Running' : 'Stopped'}</span></td>
+                        <td><code>${(cont.container_id || '').substring(0, 12)}</code></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

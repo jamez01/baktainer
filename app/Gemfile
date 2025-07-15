@@ -5,6 +5,9 @@ gem 'base64', '~> 0.2.0'
 gem 'concurrent-ruby', '~> 1.3.5'
 gem 'docker-api', '~> 2.4.0'
 gem 'cron_calc', '~> 1.0.0'
+gem 'sinatra', '~> 3.0'
+gem 'puma', '~> 6.0'
+gem 'json', '~> 2.7'
 
 group :development, :test do
   gem 'rspec', '~> 3.12'

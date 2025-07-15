@@ -79,7 +79,8 @@ RSpec.describe 'Backup Workflow Integration', :integration do
     # Disable all network connections for integration tests
     WebMock.disable_net_connect!
     
-    # Mock the Docker API containers endpoint
+    # Mock the Docker API calls to avoid HTTP connections
+    allow(Docker).to receive(:version).and_return({ 'Version' => '20.10.0' })
     allow(Docker::Container).to receive(:all).and_return(mock_containers)
     
     # Set up individual container mocks with correct info
@@ -139,10 +140,12 @@ RSpec.describe 'Backup Workflow Integration', :integration do
       
       postgres_container.backup
       
-      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*TestPostgres*.sql'))
+      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*TestPostgres*.sql.gz'))
       expect(backup_files).not_to be_empty
       
-      backup_content = File.read(backup_files.first)
+      # Read compressed content
+      require 'zlib'
+      backup_content = Zlib::GzipReader.open(backup_files.first) { |gz| gz.read }
       expect(backup_content).to eq('test backup data') # From mocked exec
     end
 
@@ -173,10 +176,12 @@ RSpec.describe 'Backup Workflow Integration', :integration do
       
       mysql_container.backup
       
-      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*TestMySQL*.sql'))
+      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*TestMySQL*.sql.gz'))
       expect(backup_files).not_to be_empty
       
-      backup_content = File.read(backup_files.first)
+      # Read compressed content
+      require 'zlib'
+      backup_content = Zlib::GzipReader.open(backup_files.first) { |gz| gz.read }
       expect(backup_content).to eq('test backup data') # From mocked exec
     end
 
@@ -207,10 +212,12 @@ RSpec.describe 'Backup Workflow Integration', :integration do
       
       sqlite_container.backup
       
-      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*TestSQLite*.sql'))
+      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*TestSQLite*.sql.gz'))
       expect(backup_files).not_to be_empty
       
-      backup_content = File.read(backup_files.first)
+      # Read compressed content
+      require 'zlib'
+      backup_content = Zlib::GzipReader.open(backup_files.first) { |gz| gz.read }
       expect(backup_content).to eq('test backup data') # From mocked exec
     end
 
@@ -247,12 +254,12 @@ RSpec.describe 'Backup Workflow Integration', :integration do
       sleep(0.5)
       
       # Check that backup files were created
-      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*.sql'))
+      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*.sql.gz'))
       expect(backup_files.length).to eq(3) # One for each test database
       
       # Verify file names include timestamp (10-digit unix timestamp)
       backup_files.each do |file|
-        expect(File.basename(file)).to match(/\w+-\d{10}\.sql/)
+        expect(File.basename(file)).to match(/\w+-\d{10}\.sql\.gz/)
       end
     end
 
@@ -344,7 +351,7 @@ RSpec.describe 'Backup Workflow Integration', :integration do
       expect(execution_time).to be < 5 # Should complete within 5 seconds
       
       # Verify all backups completed
-      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*.sql'))
+      backup_files = Dir.glob(File.join(test_backup_dir, '**', '*.sql.gz'))
       expect(backup_files.length).to eq(3)
     end
   end
