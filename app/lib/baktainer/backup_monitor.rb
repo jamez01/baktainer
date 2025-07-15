@@ -122,6 +122,29 @@ class Baktainer::BackupMonitor
     @logger.info("Cleared all performance alerts")
   end
 
+  # Get recent backups for health check endpoints
+  def get_recent_backups(limit = 50)
+    @mutex.synchronize do
+      @backup_history.last(limit).reverse
+    end
+  end
+
+  # Get failed backups for health check endpoints  
+  def get_failed_backups(limit = 20)
+    @mutex.synchronize do
+      failed = @backup_history.select { |b| b[:status] == 'failed' }
+      failed.last(limit).reverse
+    end
+  end
+
+  # Get backup history for a specific container
+  def get_container_backup_history(container_name, limit = 20)
+    @mutex.synchronize do
+      container_backups = @backup_history.select { |b| b[:container_name] == container_name }
+      container_backups.last(limit).reverse
+    end
+  end
+
   def export_metrics(format = :json)
     case format
     when :json
@@ -228,29 +251,6 @@ class Baktainer::BackupMonitor
           backup[:error]
         ]
       end
-    end
-  end
-
-  # Get recent backups for health check endpoints
-  def get_recent_backups(limit = 50)
-    @mutex.synchronize do
-      @backup_history.last(limit).reverse
-    end
-  end
-
-  # Get failed backups for health check endpoints  
-  def get_failed_backups(limit = 20)
-    @mutex.synchronize do
-      failed = @backup_history.select { |b| b[:status] == 'failed' }
-      failed.last(limit).reverse
-    end
-  end
-
-  # Get backup history for a specific container
-  def get_container_backup_history(container_name, limit = 20)
-    @mutex.synchronize do
-      container_backups = @backup_history.select { |b| b[:container_name] == container_name }
-      container_backups.last(limit).reverse
     end
   end
 end
